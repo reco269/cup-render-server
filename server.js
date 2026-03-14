@@ -12,13 +12,13 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// ── POST /render ──────────────────────────────────────────────────────────────
-// Body: multipart/form-data
-//   fps      : number
-//   frames[] : JPEG files (one per frame, in order)
-//
-// Returns: MP4 file download
-// ─────────────────────────────────────────────────────────────────────────────
+// Serve frontend
+app.use(express.static(path.join(__dirname, 'public')));
+
+// GET /health
+app.get('/health', (req, res) => res.json({ ok: true, version: '1.0.0' }));
+
+// POST /render
 app.post('/render', upload.array('frames'), async (req, res) => {
   const fps = parseInt(req.body.fps) || 60;
   const crf = parseInt(req.body.crf) || 16;
@@ -27,18 +27,16 @@ app.post('/render', upload.array('frames'), async (req, res) => {
     return res.status(400).json({ error: 'Nenhum frame recebido' });
   }
 
-  // Create temp dir for this job
   const jobDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cup-'));
   const outPath = path.join(jobDir, 'out.mp4');
 
   try {
-    // Write frames to disk as frame000000.jpg, frame000001.jpg, ...
     for (let i = 0; i < req.files.length; i++) {
       const name = `frame${String(i).padStart(6, '0')}.jpg`;
       fs.writeFileSync(path.join(jobDir, name), req.files[i].buffer);
     }
 
-    console.log(`[render] ${req.files.length} frames @ ${fps}fps → ${outPath}`);
+    console.log(`[render] ${req.files.length} frames @ ${fps}fps`);
 
     await new Promise((resolve, reject) => {
       ffmpeg()
@@ -75,18 +73,16 @@ app.post('/render', upload.array('frames'), async (req, res) => {
     console.error('[render] Error:', err.message);
     res.status(500).json({ error: err.message });
   } finally {
-    // Cleanup temp files after response
     res.on('finish', () => {
       try { fs.rmSync(jobDir, { recursive: true }); } catch {}
     });
   }
 });
 
-// ── GET /health ───────────────────────────────────────────────────────────────
-app.get('/health', (req, res) => res.json({ ok: true, version: '1.0.0' }));
+// Fallback — serve index.html para qualquer rota
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Cup Render Server rodando na porta ${PORT}`));
-
-// Serve frontend static files
-app.use(express.static(path.join(__dirname, 'public')));
+app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
