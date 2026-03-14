@@ -604,10 +604,10 @@ function applyBg() {
 // Renderiza frames individuais como PNG e monta com FFmpeg
 // Garante duração e qualidade 100% corretas independente da velocidade
 // URL do servidor de renderização — troque pelo seu após deploy no Railway
-var RENDER_SERVER_URL = 'https://SEU-PROJETO.railway.app';
+var RENDER_SERVER_URL = 'cup-render-server-production.up.railway.app';
 
 // URL do servidor — troque pelo seu após deploy no Railway
-var RENDER_SERVER_URL = 'https://SEU-PROJETO.railway.app';
+var RENDER_SERVER_URL = 'cup-render-server-production.up.railway.app';
 
 async function renderWebM(EW, EH, dur, fps, spd, crf, onProgress) {
   EW = EW % 2 === 0 ? EW : EW - 1;
