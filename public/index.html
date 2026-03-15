@@ -726,6 +726,20 @@ function getBestWebMMime() {
   return 'video/webm';
 }
 
+function getExportSettings() {
+  var dims = document.getElementById('res').value.split('x');
+  var fmt = document.getElementById('format').value;
+  return {
+    EW:  parseInt(dims[0]),
+    EH:  parseInt(dims[1]),
+    dur: parseInt(document.getElementById('duration').value),
+    fps: parseInt(document.getElementById('fps').value),
+    spd: parseFloat(document.getElementById('speed').value),
+    fmt: fmt,
+    crf: fmt === 'mp4_hq' ? '12' : '16'
+  };
+}
+
 window.addEventListener('DOMContentLoaded', function() {
   function updateGroupPos() {
     var x = parseFloat(document.getElementById('grpX').value);
@@ -790,20 +804,6 @@ window.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.sw').forEach(function(s) { s.classList.remove('on'); });
     setPlastic(this.value);
   });
-
-  function getExportSettings() {
-  var dims = document.getElementById('res').value.split('x');
-  var fmt = document.getElementById('format').value;
-  return {
-    EW:  parseInt(dims[0]),
-    EH:  parseInt(dims[1]),
-    dur: parseInt(document.getElementById('duration').value),
-    fps: parseInt(document.getElementById('fps').value),
-    spd: parseFloat(document.getElementById('speed').value),
-    fmt: fmt,
-    crf: fmt === 'mp4_hq' ? '12' : '16'
-  };
-}
 
 document.getElementById('exportBtn').addEventListener('click', async function() {
     if (isExporting || !cups.some(function(c){return c;})) return;
