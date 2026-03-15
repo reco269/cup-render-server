@@ -604,10 +604,27 @@ function applyBg() {
 // Renderiza frames individuais como PNG e monta com FFmpeg
 // Garante duração e qualidade 100% corretas independente da velocidade
 // URL do servidor de renderização — troque pelo seu após deploy no Railway
-var RENDER_SERVER_URL = 'cup-render-server-production.up.railway.app';
+var RENDER_SERVER_URL = 'https://SEU-PROJETO.railway.app';
 
-// URL do servidor — troque pelo seu após deploy no Railway
-var RENDER_SERVER_URL = 'cup-render-server-production.up.railway.app';
+var RENDER_SERVER_URL = 'https://SEU-PROJETO.railway.app';
+
+// Converte dataURL base64 para Blob sem loop byte a byte (muito mais rápido)
+function dataURLtoBlob(dataURL) {
+  var parts = dataURL.split(',');
+  var mime  = parts[0].match(/:(.*?);/)[1];
+  var bin   = atob(parts[1]);
+  var buf   = new ArrayBuffer(bin.length);
+  var view  = new Uint8Array(buf);
+  for (var i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i);
+  return new Blob([buf], { type: mime });
+}
+
+// Usa canvas.toBlob (assíncrono, nativo do browser — muito mais rápido que toDataURL+atob)
+function captureFrameBlob(canvas, quality) {
+  return new Promise(function(resolve) {
+    canvas.toBlob(resolve, 'image/jpeg', quality);
+  });
+}
 
 async function renderWebM(EW, EH, dur, fps, spd, crf, onProgress) {
   EW = EW % 2 === 0 ? EW : EW - 1;
@@ -619,47 +636,47 @@ async function renderWebM(EW, EH, dur, fps, spd, crf, onProgress) {
 
   var total = Math.round(dur * fps);
   var startRot = rotation;
-  var BATCH = 8;
+  var BATCH = 6;
 
   lg('Capturando ' + total + ' frames (' + EW + 'x' + EH + ' @ ' + fps + 'fps)');
 
-  // ── 1. Captura frames no browser ─────────────────────────────────────────
-  var frames = [];
-  var frame = 0;
+  // ── 1. Captura frames como Blob direto (sem conversão base64) ────────────
+  var formData = new FormData();
+  formData.append('fps', String(fps));
+  formData.append('crf', String(crf || 16));
 
+  var frame = 0;
+  var canvas = renderer.domElement;
+
+  // Captura em batches, adicionando direto ao FormData
   await new Promise(function(resolve) {
     function processBatch() {
+      var batchPromises = [];
       for (var b = 0; b < BATCH && frame < total; b++) {
         var rot = startRot + frame * (spd * 0.55 / fps);
         for (var i = 0; i < cups.length; i++) {
           if (cups[i]) cups[i].rotation.y = rot + CUPS[i].offset;
         }
         renderer.render(scene, camera);
-        frames.push(renderer.domElement.toDataURL('image/jpeg', 0.95));
+        // toBlob é nativo e muito mais rápido que toDataURL + atob
+        batchPromises.push(captureFrameBlob(canvas, 0.82));
         frame++;
       }
-      if (onProgress) onProgress(frame, total, 'render');
-      if (frame >= total) { resolve(); return; }
-      setTimeout(processBatch, 0);
+      Promise.all(batchPromises).then(function(blobs) {
+        var batchStart = frame - blobs.length;
+        for (var bi = 0; bi < blobs.length; bi++) {
+          formData.append('frames', blobs[bi], 'f' + String(batchStart + bi).padStart(6,'0') + '.jpg');
+        }
+        if (onProgress) onProgress(frame, total, 'render');
+        if (frame >= total) { resolve(); return; }
+        setTimeout(processBatch, 0);
+      });
     }
     processBatch();
   });
 
-  lg('Frames capturados: ' + frames.length + ' — enviando ao servidor...');
+  lg('Frames prontos — enviando ' + total + ' frames ao servidor...');
   if (onProgress) onProgress(0, total, 'upload');
-
-  // ── 2. Envia frames ao servidor para codificação com FFmpeg nativo ───────
-  var formData = new FormData();
-  formData.append('fps', String(fps));
-  formData.append('crf', String(crf || 16));
-
-  for (var fi = 0; fi < frames.length; fi++) {
-    var b64 = frames[fi].split(',')[1];
-    var bin = atob(b64);
-    var arr = new Uint8Array(bin.length);
-    for (var ci = 0; ci < bin.length; ci++) arr[ci] = bin.charCodeAt(ci);
-    formData.append('frames', new Blob([arr], { type: 'image/jpeg' }), 'f' + String(fi).padStart(6,'0') + '.jpg');
-  }
 
   if (onProgress) onProgress(total, total, 'encode');
   lg('Codificando no servidor...');
