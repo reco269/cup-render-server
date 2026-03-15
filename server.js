@@ -7,21 +7,19 @@ const path    = require('path');
 const os      = require('os');
 
 const app    = express();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 300 * 1024 * 1024 } });
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
-
-// Serve frontend
 app.use(express.static(path.join(__dirname, 'public')));
 
 // GET /health
-app.get('/health', (req, res) => res.json({ ok: true, version: '1.0.0' }));
+app.get('/health', (req, res) => res.json({ ok: true }));
 
 // POST /render
 app.post('/render', upload.array('frames'), async (req, res) => {
-  const fps = parseInt(req.body.fps) || 60;
-  const crf = parseInt(req.body.crf) || 16;
+  const fps = parseInt(req.body.fps) || 30;
+  const crf = parseInt(req.body.crf) || 18;
 
   if (!req.files || req.files.length === 0) {
     return res.status(400).json({ error: 'Nenhum frame recebido' });
@@ -31,12 +29,17 @@ app.post('/render', upload.array('frames'), async (req, res) => {
   const outPath = path.join(jobDir, 'out.mp4');
 
   try {
-    for (let i = 0; i < req.files.length; i++) {
-      const name = `frame${String(i).padStart(6, '0')}.jpg`;
-      fs.writeFileSync(path.join(jobDir, name), req.files[i].buffer);
-    }
-
     console.log(`[render] ${req.files.length} frames @ ${fps}fps`);
+
+    // Write frames to disk
+    for (let i = 0; i < req.files.length; i++) {
+      fs.writeFileSync(
+        path.join(jobDir, `frame${String(i).padStart(6,'0')}.jpg`),
+        req.files[i].buffer
+      );
+      // Free buffer from memory immediately
+      req.files[i].buffer = null;
+    }
 
     await new Promise((resolve, reject) => {
       ffmpeg()
@@ -49,20 +52,21 @@ app.post('/render', upload.array('frames'), async (req, res) => {
           '-level 3.0',
           '-pix_fmt yuv420p',
           '-movflags +faststart',
-          '-preset fast',
+          '-preset ultrafast', // menos CPU e memória
           `-crf ${crf}`,
           `-g ${fps}`,
           `-keyint_min ${fps}`,
           '-sc_threshold 0',
         ])
         .output(outPath)
+        .on('start', cmd => console.log('[ffmpeg]', cmd))
         .on('end', resolve)
         .on('error', reject)
         .run();
     });
 
     const stat = fs.statSync(outPath);
-    console.log(`[render] Done — ${Math.round(stat.size / 1024)} KB`);
+    console.log(`[render] Done — ${Math.round(stat.size/1024)} KB`);
 
     res.setHeader('Content-Type', 'video/mp4');
     res.setHeader('Content-Disposition', 'attachment; filename="cup-mockup.mp4"');
@@ -79,7 +83,7 @@ app.post('/render', upload.array('frames'), async (req, res) => {
   }
 });
 
-// Fallback — serve index.html para qualquer rota
+// Fallback
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
