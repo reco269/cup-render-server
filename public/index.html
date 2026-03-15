@@ -394,29 +394,20 @@ function initThree() {
     renderer.setSize(box.clientWidth, box.clientHeight);
   });
 
-  function loop(ts) {
-    animId = requestAnimationFrame(loop);
-    if (!isExporting) {
-      if (lastTs === null) lastTs = ts;
-      var dt = Math.min((ts - lastTs) / 1000, 0.05); lastTs = ts;
-      rotation += dt * parseFloat(document.getElementById('speed').value) * 0.55;
-      for (var i = 0; i < cups.length; i++) {
-        if (cups[i]) cups[i].rotation.y = rotation + CUPS[i].offset;
-      }
+  requestAnimationFrame(loop);
+}
+
+function loop(ts) {
+  animId = requestAnimationFrame(loop);
+  if (!isExporting) {
+    if (lastTs === null) lastTs = ts;
+    var dt = Math.min((ts - lastTs) / 1000, 0.05); lastTs = ts;
+    rotation += dt * parseFloat(document.getElementById('speed').value) * 0.55;
+    for (var i = 0; i < cups.length; i++) {
+      if (cups[i]) cups[i].rotation.y = rotation + CUPS[i].offset;
     }
-    renderer.render(scene, camera);
   }
-  requestAnimationFrame(loop);
-}
-
-function stopAnimation() {
-  if (animId) { cancelAnimationFrame(animId); animId = null; }
-  lastTs = null;
-}
-
-function resumeAnimation() {
-  lastTs = null;
-  requestAnimationFrame(loop);
+  renderer.render(scene, camera);
 }
 
 function stopAnimation() {
@@ -625,9 +616,9 @@ function applyBg() {
 // Renderiza frames individuais como PNG e monta com FFmpeg
 // Garante duração e qualidade 100% corretas independente da velocidade
 // URL do servidor de renderização — troque pelo seu após deploy no Railway
-var RENDER_SERVER_URL = 'https://cup-render-server-production.up.railway.app';
+var RENDER_SERVER_URL = 'https://SEU-PROJETO.railway.app';
 
-var RENDER_SERVER_URL = 'https://cup-render-server-production.up.railway.app';
+var RENDER_SERVER_URL = 'https://SEU-PROJETO.railway.app';
 
 // Converte dataURL base64 para Blob sem loop byte a byte (muito mais rápido)
 function dataURLtoBlob(dataURL) {
